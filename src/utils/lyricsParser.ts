@@ -15,16 +15,21 @@ export interface LineData {
 export const parseRawHtml = (html: string): LineData[] => {
   if (!html) return [];
 
-  // --- 1. CLEANING STAGE (แก้ปัญหา Wpfcll error) ---
-  // ลบ attribute อันตรายและ tag script ออกทั้งหมด
+  // --- 1. CLEANING STAGE (แก้ปัญหา Wpfcll error แบบถอนรากถอนโคน) ---
   const cleanHtml = html
-    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "") // ลบ <script>
-    .replace(/\bon\w+="[^"]*"/gim, "") // ลบ onclick="...", onload="..." (Double quote)
-    .replace(/\bon\w+='[^']*'/gim, ""); // ลบ onclick='...', onload='...' (Single quote)
+    // ลบ Tag <script> ทั้งหมด
+    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+    // ลบ onload="..." ที่มีฟังก์ชัน Wpfcll หรืออื่นๆ
+    .replace(/\bon\w+="[^"]*"/gim, "") 
+    // ลบ onload='...' (Single quote)
+    .replace(/\bon\w+='[^']*'/gim, "")
+    // ลบ iframe (บางทีมีโฆษณาติดมา)
+    .replace(/<iframe\b[^>]*>([\s\S]*?)<\/iframe>/gim, "");
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(cleanHtml, 'text/html');
   
+  // พยายามหา Container หลัก (ถ้าไม่เจอ .preview-chord-1 ก็เอา body)
   const container = doc.querySelector('.preview-chord-1') || doc.body;
   const nodes = Array.from(container.children);
 
@@ -32,11 +37,15 @@ export const parseRawHtml = (html: string): LineData[] => {
     // 2. จัดการ Blockquote
     if (node.tagName === 'BLOCKQUOTE') {
       const cleanNode = node.cloneNode(true) as Element;
-      // ล้างซ้ำอีกรอบในระดับ Node เพื่อความชัวร์
-      const hazardousElements = cleanNode.querySelectorAll('*');
-      hazardousElements.forEach(el => {
+      
+      // ล้าง attribute อันตรายอีกรอบในระดับ Element
+      const allElements = cleanNode.querySelectorAll('*');
+      allElements.forEach(el => {
+        // ลบทุก attribute ที่ขึ้นต้นด้วย 'on' (เช่น onload, onclick, onerror)
         Array.from(el.attributes).forEach(attr => {
-            if (attr.name.startsWith('on')) el.removeAttribute(attr.name);
+            if (attr.name.startsWith('on')) {
+                el.removeAttribute(attr.name);
+            }
         });
       });
 

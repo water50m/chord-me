@@ -34,7 +34,7 @@ export const SongLine = ({ line }: SongLineProps) => {
             */}
             <div className={`w-full text-right ${group.chord ? 'h-5 mb-0.5' : 'h-0'}`}>
               {group.chord && (
-                <span className="text-pink-600 font-bold text-base block">
+                <span className="text-pink-600 font-bold text-base block -translate-x-2">
                   {group.chord}
                 </span>
               )}
