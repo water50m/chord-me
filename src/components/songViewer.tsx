@@ -23,6 +23,7 @@ export default function SongViewer() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+
   useEffect(() => {
     const fetchSongs = async () => {
       try {
@@ -359,7 +360,7 @@ export default function SongViewer() {
 
 
   return (
-    <div className="h-screen w-full bg-slate-950 text-white flex overflow-hidden font-sans relative">
+    <div className="h-[100dvh] w-full bg-slate-950 text-white flex overflow-hidden font-sans relative">
       <SongSidebar
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -380,10 +381,9 @@ export default function SongViewer() {
 
       {/* ... (ส่วน Main Content เหมือนเดิม) ... */}
       <main className="flex-1 h-full bg-white relative flex flex-col overflow-hidden">
-        <div className="h-14 border-b border-slate-200 flex items-center px-4 bg-white sticky top-0 z-10 shadow-sm shrink-0">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-4 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-          </button>
+        <div className="h-14 border-b border-slate-200 flex items-center px-4 bg-white shrink-0 z-10 shadow-sm relative">          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-4 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
 
           {/* 🔥 แก้ตรงนี้ 5.1: เพิ่มปุ่มแสดงคีย์ข้างๆ ชื่อเพลง */}
           <div className="flex items-center gap-3 overflow-hidden">
