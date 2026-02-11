@@ -107,3 +107,31 @@ const parseLyricLine = (pElement: Element): ChordGroup[] => {
 
   return groups;
 };
+
+export const detectKeyFromLines = (lines: LineData[]): string => {
+  for (const line of lines) {
+    
+    // กรณี 1: ถ้าเป็นบรรทัดเนื้อเพลงปกติ (ที่มีคอร์ด)
+    if (line.type === 'lyric' && Array.isArray(line.content)) {
+      for (const group of line.content) {
+        if (group.chord) {
+          // เจอคอร์ดแรกปุ๊บ เอามาทำความสะอาดแล้วคืนค่าเลย
+          // เช่น "Asus4" -> "A", "C#m" -> "C#"
+          return group.chord.split('/')[0].replace('m', '').replace('7', '').replace('maj', '').replace('sus', '').replace(/[0-9]/g, '');
+        }
+      }
+    }
+    
+    // กรณี 2: ถ้าเป็น Blockquote (เช่น Intro)
+    if (line.type === 'blockquote' && typeof line.content === 'string') {
+       // ใช้ Regex หาคอร์ดภาษาอังกฤษตัวแรก (A-G) ที่อาจจะมี # หรือ b ตามหลัง
+       // ต้องระวังไม่ให้ไปจับโดนคำทั่วไป (logic นี้อาจจะไม่แม่นเท่ากรณี 1 แต่พอช่วยได้)
+       const match = line.content.match(/\b([A-G][#b]?)(m|maj|7|sus|add)*\b/);
+       if (match) {
+         return match[1];
+       }
+    }
+  }
+  
+  return ''; // ถ้าหาไม่เจอเลย ให้คืนค่าว่าง (เดี๋ยวไปใส่ Default C ที่หน้าบ้านเอา)
+};

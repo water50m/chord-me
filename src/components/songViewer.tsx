@@ -5,6 +5,9 @@ import { SongLine } from './songLine';
 import { SongSidebar } from './songSidebar';
 import { AutoScrollController } from './AutoScrollController';
 import { SavedSong } from '@/types';
+import { FloatingPlaylist } from './FloatingPlaylist';
+import { transposeHtml } from '@/utils/transpose';
+import { KeySelector } from './KeySelector';
 
 export default function SongViewer() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -12,29 +15,24 @@ export default function SongViewer() {
   const [parsedData, setParsedData] = useState<LineData[]>([]);
   const [savedSongs, setSavedSongs] = useState<SavedSong[]>([]);
   const [currentId, setCurrentId] = useState<number | null>(null);
+  const [showKeySettings, setShowKeySettings] = useState(false);
+  const [currentKey, setCurrentKey] = useState('C');
+  const [originalKey, setOriginalKey] = useState('C');
+  const [displayHtml, setDisplayHtml] = useState('');
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchSongs = async () => {
       try {
-        // 1. ดึงข้อมูลจาก API (Neon)
         const res = await fetch('/api/songs');
-
         if (res.ok) {
           const data = await res.json();
-          setSavedSongs(data); // อัปเดต State ด้วยข้อมูลจาก DB
+          setSavedSongs(data);
 
-          // 2. ถ้ามีเพลง ให้โหลดเพลงแรกมาแสดงทันที
           if (data.length > 0) {
-            const firstSong = data[0];
-            setInputHtml(firstSong.html);
-            setCurrentId(firstSong.id);
-            try {
-              setParsedData(parseRawHtml(firstSong.html));
-            } catch (e) {
-              console.error("Parse error:", e);
-            }
+            // 🔥 แก้ตรงนี้ 2: เรียกใช้ loadSongToPlayer แทนการ set เอง
+            loadSongToPlayer(data[0]);
           }
         }
       } catch (error) {
@@ -52,6 +50,59 @@ export default function SongViewer() {
     // *** ลบส่วน localStorage ออกไปเลยครับ ***
   }, []);
 
+  const loadSongToPlayer = (song: SavedSong) => {
+    setCurrentId(song.id);
+    setInputHtml(song.html); // เก็บต้นฉบับ (ห้ามแก้ตัวนี้ด้วย Transpose)
+
+    const orig = song.original_key || 'C'; // ถ้าไม่มีใน DB ให้เดาหรือ default C
+    const userK = song.user_key || orig;   // ถ้า user ไม่เคยเลือก ให้ใช้ original
+
+    setOriginalKey(orig);
+    setCurrentKey(userK);
+
+    // คำนวณ HTML ใหม่เดี๋ยวนั้นเลย
+    const newHtml = transposeHtml(song.html, orig, userK);
+    setDisplayHtml(newHtml);
+
+    // Parse คอร์ดจาก HTML ที่แปลงแล้ว เพื่อเอาไปทำปุ่มกดคอร์ด
+    try { setParsedData(parseRawHtml(newHtml)); } catch (e) { }
+  };
+
+  const handleKeyChange = async (newKey: string) => {
+    if (!currentId) return;
+
+    setCurrentKey(newKey);
+
+    // 1. อัปเดตหน้าจอทันที (UX)
+    const newHtml = transposeHtml(inputHtml, originalKey, newKey);
+    setDisplayHtml(newHtml);
+    try { setParsedData(parseRawHtml(newHtml)); } catch (e) { }
+
+    // 2. บันทึกลง Database (เฉพาะ user_key)
+    // (เราจะไม่บันทึก HTML ที่แก้แล้วทับลงไป ไม่งั้นเปลี่ยนกลับไม่ได้)
+    try {
+      // ต้องแก้ API PUT ให้รองรับการ update แค่ user_key
+      await fetch('/api/songs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentId,
+          user_key: newKey,
+          // ส่งค่าเดิมไปด้วยเพื่อความชัวร์ (ขึ้นอยู่กับ API คุณเขียนยังไง)
+          title: savedSongs.find(s => s.id === currentId)?.title,
+          html: inputHtml
+        }),
+      });
+
+      // อัปเดต State รายการเพลง
+      setSavedSongs(prev => prev.map(s =>
+        s.id === currentId ? { ...s, user_key: newKey } : s
+      ));
+    } catch (e) {
+      console.error("Failed to save key preference");
+    }
+  };
+
   const updateLocalStorage = (songs: SavedSong[]) => {
     setSavedSongs(songs);
     localStorage.setItem('my_song_collection', JSON.stringify(songs));
@@ -62,7 +113,7 @@ export default function SongViewer() {
     setParsedData([]);
     setCurrentId(null);
   };
-  
+
   // --- NEW: ฟังก์ชันนำเข้าและบันทึกอัตโนมัติ ---
   const handleImportSong = async (htmlContent: string) => {
     // 1. Extract Title (เหมือนเดิม)
@@ -100,6 +151,45 @@ export default function SongViewer() {
   // ------------------------------------------
 
   // ... (ฟังก์ชันอื่นๆ: handleConvert, handleSave, handleSelectSong, etc. เหมือนเดิม) ...
+  // 1. ฟังก์ชันเปลี่ยนคีย์เพื่อดูตัวอย่าง (Preview) - ไม่ยิง API
+  const handleKeyPreview = (newKey: string) => {
+      setCurrentKey(newKey);
+      // แปลง HTML ทันที
+      const newHtml = transposeHtml(inputHtml, originalKey, newKey);
+      setDisplayHtml(newHtml);
+      try { setParsedData(parseRawHtml(newHtml)); } catch(e) {}
+  };
+
+  // 2. ฟังก์ชันบันทึกลง DB (Save) - ยิง API
+  const handleKeySave = async () => {
+      if (!currentId) return;
+      
+      try {
+          // ยิง API บันทึก user_key ลง DB
+          await fetch('/api/songs', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                  id: currentId, 
+                  user_key: currentKey, // เอาคีย์ปัจจุบันที่เลือกอยู่ไปบันทึก
+                  title: savedSongs.find(s => s.id === currentId)?.title,
+                  html: inputHtml 
+              }),
+          });
+          
+          // อัปเดตข้อมูลใน State รายการเพลงหลัก
+          setSavedSongs(prev => prev.map(s => 
+              s.id === currentId ? { ...s, user_key: currentKey } : s
+          ));
+          
+          alert(`บันทึกคีย์ ${currentKey} เป็นค่าเริ่มต้นเรียบร้อย`);
+          setShowKeySettings(false); // ปิดหน้าต่าง
+      } catch (e) {
+          console.error("Failed to save key preference");
+          alert("บันทึกไม่สำเร็จ");
+      }
+  };
+  
   const handleConvert = (htmlToParse: string = inputHtml) => {
     try {
       const data = parseRawHtml(htmlToParse);
@@ -118,7 +208,13 @@ export default function SongViewer() {
     if (h1) title = h1.innerText.replace(/คอร์ดเพลง/gi, '').trim();
     else { const p = tempDiv.querySelector('p'); if (p) title = p.innerText.substring(0, 50); }
 
-    const songData = { title, html: inputHtml };
+    const songData = {
+      title,
+      html: inputHtml,
+      user_key: currentKey // <--- เพิ่มบรรทัดนี้ เพื่อบันทึกคีย์ปัจจุบัน
+    };
+
+    
 
     try {
       if (currentId) {
@@ -155,9 +251,7 @@ export default function SongViewer() {
     }
   };
   const handleSelectSong = (song: SavedSong) => {
-    setInputHtml(song.html);
-    setCurrentId(song.id);
-    handleConvert(song.html);
+    loadSongToPlayer(song); // เรียกตัวนี้ตัวเดียวจบ มันจะจัดการ Key ให้เอง
     if (window.innerWidth < 1024) setIsSidebarOpen(false);
   };
   const handleDelete = async (e: React.MouseEvent, id: number) => {
@@ -174,6 +268,7 @@ export default function SongViewer() {
       }
     }
   };
+  
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white flex overflow-hidden font-sans relative">
@@ -201,9 +296,23 @@ export default function SongViewer() {
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-4 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <h2 className="text-lg font-bold text-slate-800 truncate">
-            {savedSongs.find(s => s.id === currentId)?.title || 'ตัวอย่างผลลัพธ์ (Preview)'}
-          </h2>
+
+          {/* 🔥 แก้ตรงนี้ 5.1: เพิ่มปุ่มแสดงคีย์ข้างๆ ชื่อเพลง */}
+          <div className="flex items-center gap-3 overflow-hidden">
+            <h2 className="text-lg font-bold text-slate-800 truncate">
+              {savedSongs.find(s => s.id === currentId)?.title || 'Preview'}
+            </h2>
+
+            {/* ปุ่ม Key */}
+            <button
+              onClick={() => setShowKeySettings(true)}
+              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-pink-600 text-xs font-bold rounded border border-slate-300 transition-colors"
+            >
+              Key: {currentKey}
+            </button>
+          </div>
+
+
         </div>
         <div ref={scrollContainerRef} className="flex-1 p-4 md:p-6 overflow-y-auto lg:overflow-y-hidden lg:overflow-x-auto custom-scrollbar scroll-smooth">
           {parsedData.length > 0 ? (
@@ -220,6 +329,27 @@ export default function SongViewer() {
         {parsedData.length > 0 && <AutoScrollController scrollContainerRef={scrollContainerRef} />}
         {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
       </main>
+      {showKeySettings && (
+        <KeySelector
+          originalKey={originalKey}
+          currentKey={currentKey}
+          onPreview={handleKeyPreview} // ส่งฟังก์ชัน Preview
+          onSave={handleKeySave}       // ส่งฟังก์ชัน Save
+          onClose={() => {
+            // ถ้าปิดโดยไม่เซฟ ให้คืนค่ากลับเป็นค่าที่บันทึกล่าสุด (Optional)
+            // หรือจะปล่อยไว้ตามที่เลือกค้างไว้ก็ได้ แต่ปกติควรคืนค่า
+            const savedKey = savedSongs.find(s => s.id === currentId)?.user_key || originalKey;
+            handleKeyPreview(savedKey);
+            setShowKeySettings(false);
+          }}
+        />
+      )}
+      {/* ✅ ใส่ FloatingPlaylist ตรงนี้! (วางไว้ท้ายสุดจะได้อยู่บนสุด) */}
+      <FloatingPlaylist
+        songs={savedSongs}          // ส่งรายการเพลงทั้งหมดไป
+        currentId={currentId}       // ส่ง ID เพลงที่กำลังเล่นไป (เพื่อ Highlight)
+        onSelect={handleSelectSong} // ส่งฟังก์ชันเลือกเพลงไป
+      />
     </div>
   );
 }
