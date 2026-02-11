@@ -19,6 +19,7 @@ export default function SongViewer() {
   const [currentKey, setCurrentKey] = useState('C');
   const [originalKey, setOriginalKey] = useState('C');
   const [displayHtml, setDisplayHtml] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +38,8 @@ export default function SongViewer() {
         }
       } catch (error) {
         console.error('Failed to load songs', error);
+      } finally {
+        setIsLoading(false); // โหลดเสร็จแล้ว
       }
     };
 
@@ -400,7 +403,13 @@ export default function SongViewer() {
 
         </div>
         <div ref={scrollContainerRef} className="flex-1 p-4 md:p-6 overflow-y-auto lg:overflow-y-hidden lg:overflow-x-auto custom-scrollbar scroll-smooth">
-          {parsedData.length > 0 ? (
+          {isLoading ? (
+            // แสดงตัวโหลดระหว่างรอ API
+            <div className="flex h-full flex-col items-center justify-center text-pink-500">
+              <div className="w-10 h-10 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-sm font-medium animate-pulse">กำลังโหลด Playlist...</p>
+            </div>
+          ) : parsedData.length > 0 ? (
             <div className="flex flex-col gap-1 lg:flex-wrap lg:content-start lg:h-full lg:gap-x-8 lg:gap-y-0">
               {parsedData.map((line, idx) => (<SongLine key={idx} line={line} />))}
             </div>
