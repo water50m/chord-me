@@ -10,7 +10,7 @@ import { transposeHtml } from '@/utils/transpose';
 import { KeySelector } from './KeySelector';
 
 export default function SongViewer() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputHtml, setInputHtml] = useState('');
   const [parsedData, setParsedData] = useState<LineData[]>([]);
   const [savedSongs, setSavedSongs] = useState<SavedSong[]>([]);
