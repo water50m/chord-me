@@ -324,7 +324,7 @@ export const SongSidebar = ({
                           {song.title}
                         </div>
                       </div>
-                      <button onClick={(e) => onDelete(e, song.id)} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 px-2 transition-opacity">🗑️</button>
+                      <button onClick={(e) => onDelete(e, song.id)} className="text-slate-500 hover:text-red-400 opacity-0 opacity-100 px-2 transition-opacity">🗑️</button>
                     </div>
                     {isBottom && <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] z-10 pointer-events-none rounded-full transition-all"></div>}
                   </div>
