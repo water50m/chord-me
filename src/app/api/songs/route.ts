@@ -1,11 +1,76 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/neon';
 
-// 1. ดึงข้อมูล (GET)
+// 2. สร้างเพลงใหม่ (POST) - 🔥 จุดสำคัญที่ต้องแก้
+export async function POST(request: Request) {
+  try {
+    // รับค่า key ที่ส่งมาจาก Frontend (ซึ่งคือ Original Key ที่ Puppeteer หามา)
+    const { title, html, key } = await request.json(); 
+    
+    // ตั้งค่า Default เป็น 'C' ถ้าไม่มีส่งมา
+    const initialKey = key || 'C';
+
+    const client = await pool.connect();
+    
+    // 🔥 แก้ SQL: บันทึกทั้ง original_key และ user_key ให้เป็นค่าเริ่มต้นเดียวกัน
+    const { rows } = await client.query(
+      'INSERT INTO songs (title, html, original_key, user_key) VALUES ($1, $2, $3, $4) RETURNING *',
+      [title, html, initialKey, initialKey] // $3=original, $4=user (เริ่มมาเท่ากัน)
+    );
+    
+    client.release();
+    return NextResponse.json(rows[0]);
+  } catch (error) {
+    console.error('Database Error:', error);
+    return NextResponse.json({ error }, { status: 500 });
+  }
+}
+
+// 3. แก้ไขเพลง (PUT) - สำหรับตอน User กด Save Key ใหม่
+// api/songs/route.ts (ส่วน PUT)
+export async function PUT(request: Request) {
+  try {
+    const { id, title, html, original_key, user_key } = await request.json();
+    const client = await pool.connect();
+
+    const { rows } = await client.query(
+      `UPDATE songs 
+       SET title = $1, 
+           html = $2, 
+           original_key = COALESCE($3, original_key), 
+           user_key = COALESCE($4, user_key) 
+       WHERE id = $5 
+       RETURNING *`,
+      [title, html, original_key, user_key, id]
+    );
+    
+    client.release();
+    return NextResponse.json(rows[0]);
+  } catch (error) {
+    return NextResponse.json({ error }, { status: 500 });
+  }
+}
+
+// 4. ลบเพลง (DELETE) - เหมือนเดิม
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const client = await pool.connect();
+    await client.query('DELETE FROM songs WHERE id = $1', [id]);
+    client.release();
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error }, { status: 500 });
+  }
+}
+
+// 1. แก้ไข GET ให้เรียงตาม order_index
 export async function GET() {
   try {
     const client = await pool.connect();
-    const { rows } = await client.query('SELECT * FROM songs ORDER BY id DESC');
+    // เรียงตาม order_index จากน้อยไปมาก
+    const { rows } = await client.query('SELECT * FROM songs ORDER BY order_index ASC, id DESC');
     client.release();
     return NextResponse.json(rows);
   } catch (error) {
@@ -13,45 +78,17 @@ export async function GET() {
   }
 }
 
-// 2. สร้างเพลงใหม่ (POST)
-export async function POST(request: Request) {
+// 2. เพิ่มฟังก์ชันสำหรับบันทึกลำดับเพลงใหม่ (Reorder)
+export async function PATCH(request: Request) {
   try {
-    const { title, html } = await request.json();
+    const { sortedIds } = await request.json(); // รับอาเรย์ของ ID ที่เรียงแล้ว เช่น [5, 3, 8]
     const client = await pool.connect();
-    const { rows } = await client.query(
-      'INSERT INTO songs (title, html) VALUES ($1, $2) RETURNING *',
-      [title, html]
-    );
-    client.release();
-    return NextResponse.json(rows[0]);
-  } catch (error) {
-    return NextResponse.json({ error }, { status: 500 });
-  }
-}
-
-// 3. แก้ไขเพลง (PUT)
-export async function PUT(request: Request) {
-  try {
-    const { id, title, html } = await request.json();
-    const client = await pool.connect();
-    const { rows } = await client.query(
-      'UPDATE songs SET title = $1, html = $2 WHERE id = $3 RETURNING *',
-      [title, html, id]
-    );
-    client.release();
-    return NextResponse.json(rows[0]);
-  } catch (error) {
-    return NextResponse.json({ error }, { status: 500 });
-  }
-}
-
-// 4. ลบเพลง (DELETE)
-export async function DELETE(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const client = await pool.connect();
-    await client.query('DELETE FROM songs WHERE id = $1', [id]);
+    
+    // อัปเดต order_index ของแต่ละเพลงตามลำดับในอาเรย์
+    for (let i = 0; i < sortedIds.length; i++) {
+      await client.query('UPDATE songs SET order_index = $1 WHERE id = $2', [i, sortedIds[i]]);
+    }
+    
     client.release();
     return NextResponse.json({ success: true });
   } catch (error) {

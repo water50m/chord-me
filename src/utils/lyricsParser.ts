@@ -135,3 +135,18 @@ export const detectKeyFromLines = (lines: LineData[]): string => {
   
   return ''; // ถ้าหาไม่เจอเลย ให้คืนค่าว่าง (เดี๋ยวไปใส่ Default C ที่หน้าบ้านเอา)
 };
+
+
+
+export  const extractKeyFromHtml = (html: string): string => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  // หาคอร์ดแรกจาก class c_chord ที่เราดึงมาจากต้นทาง
+  const firstChordEl = doc.querySelector('.c_chord');
+  if (firstChordEl && firstChordEl.textContent) {
+    const chord = firstChordEl.textContent.trim();
+    // ลบส่วนขยายของคอร์ดออกเพื่อให้เหลือแต่คีย์หลัก (เช่น Am7 -> A)
+    return chord.split('/')[0].replace(/m|maj|7|sus|add/g, '').replace(/[0-9]/g, '');
+  }
+  return 'C'; // Default ถ้าหาไม่เจอ
+};

@@ -52,19 +52,19 @@ export default function SongViewer() {
 
   const loadSongToPlayer = (song: SavedSong) => {
     setCurrentId(song.id);
-    setInputHtml(song.html); // เก็บต้นฉบับ (ห้ามแก้ตัวนี้ด้วย Transpose)
+    setInputHtml(song.html);
 
-    const orig = song.original_key || 'C'; // ถ้าไม่มีใน DB ให้เดาหรือ default C
-    const userK = song.user_key || orig;   // ถ้า user ไม่เคยเลือก ให้ใช้ original
+    const orig = song.original_key || 'C';
+
+    // ตรวจสอบค่าชั่วคราวจาก localStorage ก่อน ถ้าไม่มีค่อยเอาจาก DB
+    const tempKey = localStorage.getItem(`temp_key_${song.id}`);
+    const userK = tempKey || song.user_key || orig;
 
     setOriginalKey(orig);
     setCurrentKey(userK);
 
-    // คำนวณ HTML ใหม่เดี๋ยวนั้นเลย
     const newHtml = transposeHtml(song.html, orig, userK);
     setDisplayHtml(newHtml);
-
-    // Parse คอร์ดจาก HTML ที่แปลงแล้ว เพื่อเอาไปทำปุ่มกดคอร์ด
     try { setParsedData(parseRawHtml(newHtml)); } catch (e) { }
   };
 
@@ -115,22 +115,66 @@ export default function SongViewer() {
   };
 
   // --- NEW: ฟังก์ชันนำเข้าและบันทึกอัตโนมัติ ---
-  const handleImportSong = async (htmlContent: string) => {
-    // 1. Extract Title (เหมือนเดิม)
-    const cleanHtml = htmlContent.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "");
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = cleanHtml;
-    let title = 'เพลงนำเข้า';
-    // ... logic หา title ...
-    const h1 = tempDiv.querySelector('h1');
-    if (h1) title = h1.innerText.replace(/คอร์ดเพลง/gi, '').trim();
+  // แก้ไข Signature ให้รับได้ทั้ง String และ Object
+  const handleImportSong = async (data: string | { html: string; title?: string; originalKey?: string }) => {
 
-    // 2. ยิง API บันทึกเลย
+    // ---------------------------------------------------------
+    // 1. แยกแยะข้อมูล (Unpack Data)
+    // ---------------------------------------------------------
+    let htmlContent = '';
+    let fetchedTitle = '';
+    let fetchedKey = '';
+
+    if (typeof data === 'string') {
+      // กรณี 1: Paste HTML เอง (data คือ string ก้อน HTML)
+      htmlContent = data;
+    } else {
+      // กรณี 2: Import ผ่าน URL (data คือ object ที่มี title, key ติดมา)
+      htmlContent = data.html;
+      fetchedTitle = data.title || '';
+      fetchedKey = data.originalKey || '';
+    }
+
+    // ---------------------------------------------------------
+    // 2. Clean HTML (Logic เดิม)
+    // ---------------------------------------------------------
+    const cleanHtml = htmlContent.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "");
+
+    // ---------------------------------------------------------
+    // 3. กำหนด Title (Priority: API > HTML Parsing > Default)
+    // ---------------------------------------------------------
+    let title = fetchedTitle; // เริ่มต้นด้วย Title จาก API
+
+    if (!title) {
+      // ถ้า API ไม่ส่ง Title มา -> ให้ลองแกะเองจาก <h1> เหมือนเดิม
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cleanHtml;
+      const h1 = tempDiv.querySelector('h1');
+      if (h1) {
+        title = h1.innerText.replace(/คอร์ดเพลง/gi, '').trim();
+      }
+    }
+
+    // ถ้ายังหาไม่ได้อีก ให้ใช้ชื่อ Default
+    if (!title) title = 'เพลงนำเข้า';
+
+    // ---------------------------------------------------------
+    // 4. กำหนด Key
+    // ---------------------------------------------------------
+    const key = fetchedKey || 'C'; // ถ้าไม่มี Key ส่งมา ให้ Default เป็น C
+
+    // ---------------------------------------------------------
+    // 5. บันทึกลง Database
+    // ---------------------------------------------------------
     try {
       const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, html: htmlContent }),
+        body: JSON.stringify({
+          title,
+          html: cleanHtml, // ใช้ HTML ที่ Clean แล้ว
+          key: key         // 🔥 ส่ง Key ไปด้วย (สำคัญ!)
+        }),
       });
 
       if (res.ok) {
@@ -140,11 +184,16 @@ export default function SongViewer() {
         // โหลดเข้า Editor
         setInputHtml(newSong.html);
         setCurrentId(newSong.id);
+
+        // ถ้าคุณมี State เก็บ Key ปัจจุบัน ก็อัปเดตตรงนี้ด้วย
+        // setTransposeKey(newSong.key); 
+
         try { setParsedData(parseRawHtml(newSong.html)); } catch (e) { }
 
         if (window.innerWidth < 1024) setIsSidebarOpen(false);
       }
     } catch (error) {
+      console.error(error);
       alert('นำเข้าล้มเหลว');
     }
   };
@@ -153,43 +202,54 @@ export default function SongViewer() {
   // ... (ฟังก์ชันอื่นๆ: handleConvert, handleSave, handleSelectSong, etc. เหมือนเดิม) ...
   // 1. ฟังก์ชันเปลี่ยนคีย์เพื่อดูตัวอย่าง (Preview) - ไม่ยิง API
   const handleKeyPreview = (newKey: string) => {
-      setCurrentKey(newKey);
-      // แปลง HTML ทันที
-      const newHtml = transposeHtml(inputHtml, originalKey, newKey);
-      setDisplayHtml(newHtml);
-      try { setParsedData(parseRawHtml(newHtml)); } catch(e) {}
-  };
+    if (!currentId) return;
 
+    // 1. อัปเดต State หน้าจอทันที
+    setCurrentKey(newKey);
+
+    // 2. คำนวณและแสดงผล HTML ใหม่
+    const newHtml = transposeHtml(inputHtml, originalKey, newKey);
+    setDisplayHtml(newHtml);
+    try { setParsedData(parseRawHtml(newHtml)); } catch (e) { }
+
+    // 3. บันทึกลง localStorage (จำค่าชั่วคราวเผื่อ Refresh)
+    localStorage.setItem(`temp_key_${currentId}`, newKey);
+  };
   // 2. ฟังก์ชันบันทึกลง DB (Save) - ยิง API
   const handleKeySave = async () => {
-      if (!currentId) return;
-      
-      try {
-          // ยิง API บันทึก user_key ลง DB
-          await fetch('/api/songs', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  id: currentId, 
-                  user_key: currentKey, // เอาคีย์ปัจจุบันที่เลือกอยู่ไปบันทึก
-                  title: savedSongs.find(s => s.id === currentId)?.title,
-                  html: inputHtml 
-              }),
-          });
-          
-          // อัปเดตข้อมูลใน State รายการเพลงหลัก
-          setSavedSongs(prev => prev.map(s => 
-              s.id === currentId ? { ...s, user_key: currentKey } : s
-          ));
-          
-          alert(`บันทึกคีย์ ${currentKey} เป็นค่าเริ่มต้นเรียบร้อย`);
-          setShowKeySettings(false); // ปิดหน้าต่าง
-      } catch (e) {
-          console.error("Failed to save key preference");
-          alert("บันทึกไม่สำเร็จ");
+    if (!currentId) return;
+
+    try {
+      // ยิง API ไปที่ PUT เพื่ออัปเดต user_key
+      const res = await fetch('/api/songs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: currentId,
+          user_key: currentKey, // ส่งคีย์ที่เลือกอยู่ในปัจจุบัน
+          title: savedSongs.find(s => s.id === currentId)?.title,
+          html: inputHtml
+        }),
+      });
+
+      if (res.ok) {
+        // เมื่อเซฟลง DB สำเร็จแล้ว ให้ลบค่าชั่วคราวใน localStorage ออก
+        localStorage.removeItem(`temp_key_${currentId}`);
+
+        // อัปเดตรายการเพลงใน State หลัก
+        setSavedSongs(prev => prev.map(s =>
+          s.id === currentId ? { ...s, user_key: currentKey } : s
+        ));
+
+        alert(`บันทึกคีย์ ${currentKey} เป็นคีย์เริ่มต้นแล้ว`);
+        setShowKeySettings(false); // ปิดหน้าต่าง
       }
+    } catch (e) {
+      console.error("Failed to save key preference");
+      alert("บันทึกล้มเหลว");
+    }
   };
-  
+
   const handleConvert = (htmlToParse: string = inputHtml) => {
     try {
       const data = parseRawHtml(htmlToParse);
@@ -214,7 +274,7 @@ export default function SongViewer() {
       user_key: currentKey // <--- เพิ่มบรรทัดนี้ เพื่อบันทึกคีย์ปัจจุบัน
     };
 
-    
+
 
     try {
       if (currentId) {
@@ -268,7 +328,32 @@ export default function SongViewer() {
       }
     }
   };
-  
+
+  const handleUpdatePlaylist = async (updatedSongs: SavedSong[]) => {
+    // 1. อัปเดต UI ทันทีเพื่อให้ลื่นไหล (Optimistic UI)
+    setSavedSongs(updatedSongs);
+
+    // 2. ส่งลำดับ ID ใหม่ไปบันทึกใน Database
+    try {
+      const sortedIds = updatedSongs.map(song => song.id);
+
+      const res = await fetch('/api/songs', {
+        method: 'PATCH', // หรือ URL API ที่คุณสร้างสำหรับ Reorder
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sortedIds }),
+      });
+
+      if (!res.ok) throw new Error('Failed to save order');
+
+      // บันทึกสำรองลง localStorage (ถ้ายังต้องการ)
+      localStorage.setItem('my_song_collection', JSON.stringify(updatedSongs));
+    } catch (error) {
+      console.error('Reorder error:', error);
+      alert('ไม่สามารถบันทึกลำดับเพลงได้');
+    }
+  };
+
+
 
   return (
     <div className="h-screen w-full bg-slate-950 text-white flex overflow-hidden font-sans relative">
@@ -284,7 +369,7 @@ export default function SongViewer() {
         onSave={handleSave}
         onSelect={handleSelectSong}
         onDelete={handleDelete}
-        onUpdatePlaylist={updateLocalStorage}
+        onUpdatePlaylist={handleUpdatePlaylist}
 
         // ส่งฟังก์ชันใหม่ไปให้ Sidebar
         onImport={handleImportSong}
@@ -327,7 +412,7 @@ export default function SongViewer() {
           )}
         </div>
         {parsedData.length > 0 && <AutoScrollController scrollContainerRef={scrollContainerRef} />}
-        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-20 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
+        {isSidebarOpen && <div className="fixed inset-0 bg-black/20 z-20 lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
       </main>
       {showKeySettings && (
         <KeySelector

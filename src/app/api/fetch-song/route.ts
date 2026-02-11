@@ -68,7 +68,8 @@ export async function GET(request: Request) {
         // ตัดคำว่า "Key " ออก และ trim ช่องว่าง (เช่น "Key Bb" -> "Bb")
         originalKey = keyEl.textContent.replace(/Key/gi, '').trim();
       }
-
+          console.log('see key here');
+    console.log(originalKey);
       return { html: content, title, originalKey };
     });
 
