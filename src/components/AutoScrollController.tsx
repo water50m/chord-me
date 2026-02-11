@@ -78,7 +78,7 @@ export const AutoScrollController = ({ scrollContainerRef }: AutoScrollControlle
         `}
         title="เปิด Auto Scroll"
       >
-        {isPlaying ? '▶' : '📜'}
+        {isPlaying ? '▶' : '▶'}
       </button>
     );
   }
