@@ -27,6 +27,8 @@ export const FloatingPlaylist = ({ songs, currentId, onSelect }: FloatingPlaylis
     const dragOffset = useRef({ right: 0, top: 0 });
     const containerRef = useRef<HTMLDivElement>(null);
 
+    
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             // ถ้า Playlist เปิดอยู่ และจุดที่คลิกไม่ได้อยู่ใน containerRef

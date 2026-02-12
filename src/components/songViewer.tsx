@@ -23,7 +23,11 @@ export default function SongViewer() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-
+useEffect(() => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+        }
+    }, [currentId]);
   useEffect(() => {
     const fetchSongs = async () => {
       try {
@@ -381,7 +385,7 @@ export default function SongViewer() {
       />
 
       {/* ... (ส่วน Main Content เหมือนเดิม) ... */}
-      <main className="flex-1 h-full bg-white relative flex flex-col overflow-hidden">
+      <main className="flex-1 h-full bg-white relative flex flex-col overflow-hidden mb-5">
         <div className="h-14 border-b border-slate-200 flex items-center px-4 bg-white shrink-0 z-10 shadow-sm relative">          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-4 rounded-md text-slate-600 hover:bg-slate-100 focus:outline-none">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
