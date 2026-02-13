@@ -4,24 +4,21 @@ import pool from '@/lib/neon';
 // 2. สร้างเพลงใหม่ (POST) - 🔥 จุดสำคัญที่ต้องแก้
 export async function POST(request: Request) {
   try {
-    // รับค่า key ที่ส่งมาจาก Frontend (ซึ่งคือ Original Key ที่ Puppeteer หามา)
-    const { title, html, key } = await request.json(); 
-    
-    // ตั้งค่า Default เป็น 'C' ถ้าไม่มีส่งมา
-    const initialKey = key || 'C';
-
+    const { title, html, key, type, color } = await request.json(); // ✅ รับ color มาด้วย
     const client = await pool.connect();
     
-    // 🔥 แก้ SQL: บันทึกทั้ง original_key และ user_key ให้เป็นค่าเริ่มต้นเดียวกัน
+    // ✅ เพิ่ม color ในคำสั่ง INSERT
     const { rows } = await client.query(
-      'INSERT INTO songs (title, html, original_key, user_key) VALUES ($1, $2, $3, $4) RETURNING *',
-      [title, html, initialKey, initialKey] // $3=original, $4=user (เริ่มมาเท่ากัน)
+      `INSERT INTO songs (title, html, original_key, user_key, type, color) 
+       VALUES ($1, $2, $3, $3, $4, $5) 
+       RETURNING *`,
+      [title, html, key || 'C', type || 'song', color || null] // ส่งค่า color เข้าไป
     );
     
     client.release();
     return NextResponse.json(rows[0]);
   } catch (error) {
-    console.error('Database Error:', error);
+    console.error(error);
     return NextResponse.json({ error }, { status: 500 });
   }
 }
@@ -69,7 +66,7 @@ export async function DELETE(request: Request) {
 export async function GET() {
   try {
     const client = await pool.connect();
-    // เรียงตาม order_index จากน้อยไปมาก
+    // ✅ มั่นใจว่าดึงทุก column รวมถึง color
     const { rows } = await client.query('SELECT * FROM songs ORDER BY order_index ASC, id DESC');
     client.release();
     return NextResponse.json(rows);

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { parseRawHtml, LineData } from '@/utils/lyricsParser';
 import { SongLine } from './songLine';
-import { SongSidebar } from './songSidebar';
+import { SongSidebar } from './sidebar/songSidebar';
 import { AutoScrollController } from './AutoScrollController';
 import { SavedSong } from '@/types';
 import { FloatingPlaylist } from './FloatingPlaylist';

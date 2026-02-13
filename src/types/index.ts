@@ -5,4 +5,6 @@ export interface SavedSong {
   html: string;
   original_key?: string; 
   user_key?: string;
+  type?: 'song' | 'talk' | 'break' | 'note';
+  color?: string;
 }

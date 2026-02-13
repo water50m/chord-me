@@ -170,7 +170,7 @@ export const AutoScrollController = ({ scrollContainerRef }: AutoScrollControlle
         {/* Increase Speed (+ อยู่บน) */}
         <button 
             onClick={handleIncrease}
-            className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center text-lg font-bold transition-colors active:scale-95"
+            className="w-14 h-14 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center text-lg font-bold transition-colors active:scale-95"
             title="เพิ่มความเร็ว"
         >
             +
@@ -188,7 +188,7 @@ export const AutoScrollController = ({ scrollContainerRef }: AutoScrollControlle
         {/* Decrease Speed (- อยู่ล่าง) */}
         <button 
             onClick={handleDecrease}
-            className="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center text-lg font-bold transition-colors active:scale-95"
+            className="w-14 h-14 rounded-full bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center text-lg font-bold transition-colors active:scale-95"
             title="ลดความเร็ว"
         >
             −
